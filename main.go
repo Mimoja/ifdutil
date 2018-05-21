@@ -17,6 +17,7 @@ func main() {
 
 	//legacyDump := flag.Bool("fork", false, "a bool")
 	layout := flag.String("layout", "", "dump regions into a flashrom layout file")
+	extract := flag.Bool("extract", false, "extract intel fd modules)
 
 	flag.Parse()
 
@@ -54,20 +55,48 @@ func main() {
 		ioutil.WriteFile(*layout, []byte(layoutString), 0644)
 	}
 
+	if(*extract){
+
+	}
+
 	//enc.Encode(fd)
 	//enc.Encode(pfd)
+}
+func getRegionLimits(region RegionSectionEntry) (int64, int64, int64){
+	start, _ := strconv.ParseInt(region.START, 0, 64)
+	end, _ := strconv.ParseInt(region.END, 0, 64)
+	error, _ := strconv.ParseInt("0x00FFF000", 0, 64)
+
+	return (start, end, error)
 }
 
 func printLayout(region RegionSectionEntry, name string) string{
 
-	start, _ := strconv.ParseInt(region.START, 0, 64)
-	end, _ := strconv.ParseInt(region.END, 0, 64)
-
-	error, _ := strconv.ParseInt("0x00FFF000", 0, 64)
+	start, end, error := getRegionLimits(region)
 
 
 	if(start < end && start < error && end < error){
 		return fmt.Sprintf("%08x:%08x %s\n", start, end, name)
 	}
 	return ""
+}
+
+func readRegion(file *os.File, region RegionSectionEntry) []byte {
+
+	start, end, error := getRegionLimits(region)
+
+
+	if(start > end || start > error || end > error){
+		return make([]byte, 0)
+	}
+
+	bytes := make([]byte, end-start)
+
+	file.Seek(start, 0)
+	_, err := file.Read(bytes)
+	if err != nil {
+		panic(err)
+	}
+
+	return bytes
 }
