@@ -17,7 +17,7 @@ func main() {
 
 	//legacyDump := flag.Bool("fork", false, "a bool")
 	layout := flag.String("layout", "", "dump regions into a flashrom layout file")
-	extract := flag.Bool("extract", false, "extract intel fd modules)
+	extract := flag.Bool("extract", false, "extract intel fd modules")
 
 	flag.Parse()
 
@@ -56,18 +56,28 @@ func main() {
 	}
 
 	if(*extract){
-
+		writeRegionToFile("_flashregion_0_flashdescriptor.bin", readRegion(f, pfd.REGION.FLASH))
+		writeRegionToFile("_flashregion_1_bios.bin",readRegion(f,pfd.REGION.BIOS))
+		writeRegionToFile("_flashregion_2_intel_me.bin",readRegion(f,pfd.REGION.ME))
+		writeRegionToFile("_flashregion_3_gbe.bin",readRegion(f,pfd.REGION.ETHERNET))
+		writeRegionToFile("_flashregion_4_platform_data.bin",readRegion(f,pfd.REGION.PLATFORM))
+		writeRegionToFile("_flashregion_5_reserved.bin",readRegion(f,pfd.REGION.EXPANSION))
+		writeRegionToFile("_flashregion_6_reserved.bin",readRegion(f,pfd.REGION.RESERVED1))
+		writeRegionToFile("_flashregion_7_reserved.bin",readRegion(f,pfd.REGION.RESERVED2))
+		writeRegionToFile("_flashregion_8_ec.bin",readRegion(f,pfd.REGION.EC))
 	}
 
 	//enc.Encode(fd)
 	//enc.Encode(pfd)
 }
-func getRegionLimits(region RegionSectionEntry) (int64, int64, int64){
+func getRegionLimits(region RegionSectionEntry) (int64, int64, bool){
 	start, _ := strconv.ParseInt(region.START, 0, 64)
 	end, _ := strconv.ParseInt(region.END, 0, 64)
 	error, _ := strconv.ParseInt("0x00FFF000", 0, 64)
 
-	return (start, end, error)
+	iserror := start >= error || start >= end
+
+	return start, end, iserror
 }
 
 func printLayout(region RegionSectionEntry, name string) string{
@@ -75,22 +85,21 @@ func printLayout(region RegionSectionEntry, name string) string{
 	start, end, error := getRegionLimits(region)
 
 
-	if(start < end && start < error && end < error){
+	if(!error){
 		return fmt.Sprintf("%08x:%08x %s\n", start, end, name)
 	}
 	return ""
 }
 
-func readRegion(file *os.File, region RegionSectionEntry) []byte {
+func readRegion(file *os.File, region RegionSectionEntry, ) []byte {
 
 	start, end, error := getRegionLimits(region)
 
-
-	if(start > end || start > error || end > error){
-		return make([]byte, 0)
+	if(error){
+		return nil
 	}
 
-	bytes := make([]byte, end-start)
+	bytes := make([]byte, end-start+1)
 
 	file.Seek(start, 0)
 	_, err := file.Read(bytes)
@@ -99,4 +108,10 @@ func readRegion(file *os.File, region RegionSectionEntry) []byte {
 	}
 
 	return bytes
+}
+
+func writeRegionToFile(filename string, data []byte){
+	if(data != nil){
+		ioutil.WriteFile(filename, data, 0644)
+	}
 }
