@@ -22,7 +22,7 @@ type FlashDescriptorHeader struct {
 
 type FlashDescriptorHeaderFLMAP0 struct {
 	RESERVED0 uint32
-	RESERVED1 uint32
+	NR        uint32
 	FRBA      string
 	RESERVED2 uint32
 	RESERVED3 uint32
@@ -47,6 +47,7 @@ type FlashDescriptorHeaderFLMAP2 struct {
 	FMSBA     string
 }
 type FlashDescriptorHeaderFLUMAP1 struct {
+	VTL   uint32
 	VTBA string
 }
 type MEFlashControl struct {
@@ -106,8 +107,8 @@ type RegionSection struct {
 	ETHERNET  RegionSectionEntry
 	PLATFORM  RegionSectionEntry
 	EXPANSION RegionSectionEntry
-	RESERVED1 RegionSectionEntry
 	RESERVED2 RegionSectionEntry
+	RESERVED3 RegionSectionEntry
 	EC        RegionSectionEntry
 	//RESERVED3 RegionSectionEntry 9 or 10?
 }
@@ -140,6 +141,36 @@ type ComponentSectionFLILL struct {
 	InvalidInstruction2 string
 	InvalidInstruction3 string
 }
+
 type ComponentSectionFLPB struct {
 	FlashPartitionBoundaryAddress string
+}
+
+func getRegionByNumber(pfd FlashDescriptor, index int) (RegionSectionEntry, string , string, string){
+	switch index {
+	case 0: return pfd.REGION.FLASH, "fd", "flashdescriptor", "Flash Descriptor"
+	case 1: return pfd.REGION.BIOS, "bios", "bios", "Bios"
+	case 2: return pfd.REGION.ME, "me", "intel_me", "Intel ME"
+	case 3: return pfd.REGION.ETHERNET, "gbe", "gbe", "Ethernet"
+	case 4: return pfd.REGION.PLATFORM, "pd" , "platform_data", "Platform Data"
+	case 5: return pfd.REGION.EXPANSION, "res1", "reserved1", "Expansion / Reserved1"
+	case 6: return pfd.REGION.RESERVED2, "res2", "reserved2", "Reserved 2"
+	case 7: return pfd.REGION.RESERVED3, "res3", "reserved3", "Reserved 3"
+	case 8: return pfd.REGION.EC, "ec", "ec", "Embedded Controler"
+	}
+	panic("Unknown region index")
+	return pfd.REGION.FLASH, "","",""
+}
+
+func getMasterSectionByNumber(pfd FlashDescriptor, index int) (MasterSectionEntry, string){
+	switch index {
+	case 0: return pfd.MASTER.BIOS, "Host CPU/BIOS"
+	case 1: return pfd.MASTER.ME, "Intel ME"
+	case 2:  return pfd.MASTER.ETHERNET, "Ethernet"
+	case 3:  return pfd.MASTER.RESERVED, "RESERVED"
+	case 4:  return pfd.MASTER.EC, "EC"
+
+	}
+	panic("Unknown region index")
+	return pfd.MASTER.RESERVED, ""
 }

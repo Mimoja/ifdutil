@@ -8,34 +8,35 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 	var fd FlashDescriptor
 
 	fd.HEADER = FlashDescriptorHeader{
-		FLVALSIG: toHexString(descriptor.Header.Flvalsig),
+		FLVALSIG: toHexString(descriptor.Header.Flvalsig,8),
 		FLMAP0: FlashDescriptorHeaderFLMAP0{
 			RESERVED0: getBits(descriptor.Header.Flmap0, 27, 31),
-			RESERVED1: getBits(descriptor.Header.Flmap0, 24, 26),
-			FRBA:      toHexString(getBits(descriptor.Header.Flmap0, 16, 23) << 4),
+			NR       : getBits(descriptor.Header.Flmap0, 24, 26),
+			FRBA:      toHexString(getBits(descriptor.Header.Flmap0, 16, 23) << 4,0),
 			RESERVED2: getBits(descriptor.Header.Flmap0, 13, 15),
 			RESERVED3: getBits(descriptor.Header.Flmap0, 12, 12),
 			RESERVED4: getBits(descriptor.Header.Flmap0, 11, 11),
 			RESERVED5: getBits(descriptor.Header.Flmap0, 10, 10),
 			NC:        getBits(descriptor.Header.Flmap0, 8, 9) + 1,
-			FCBA:      toHexString(getBits(descriptor.Header.Flmap0, 0, 7) << 4),
+			FCBA:      toHexString(getBits(descriptor.Header.Flmap0, 0, 7) << 4,0),
 		},
 		FLMAP1: FlashDescriptorHeaderFLMAP1{
-			ISL:       toHexString(getBits(descriptor.Header.Flmap1, 24, 31)),
-			FPSBA:     toHexString(getBits(descriptor.Header.Flmap1, 16, 23) << 4),
+			ISL:       toHexString(getBits(descriptor.Header.Flmap1, 24, 31),8),
+			FPSBA:     toHexString(getBits(descriptor.Header.Flmap1, 16, 23) << 4,2),
 			RESERVED0: getBits(descriptor.Header.Flmap1, 11, 15),
 			NM:        getBits(descriptor.Header.Flmap1, 8, 10),
-			FMBA:      toHexString(getBits(descriptor.Header.Flmap1, 0, 7) << 4),
+			FMBA:      toHexString(getBits(descriptor.Header.Flmap1, 0, 7) << 4,0),
 		},
 		FLMAP2: FlashDescriptorHeaderFLMAP2{
-			RIL:     toHexString(getBits(descriptor.Header.Flmap2, 24, 31)),
-			ICCRIBA: toHexString(getBits(descriptor.Header.Flmap2, 16, 23)),
-			PSL:     toHexString(getBits(descriptor.Header.Flmap2, 8, 15)),
-			FMSBA:   toHexString(getBits(descriptor.Header.Flmap2, 0, 7) << 4),
+			RIL:     toHexString(getBits(descriptor.Header.Flmap2, 24, 31),8),
+			ICCRIBA: toHexString(getBits(descriptor.Header.Flmap2, 16, 23),4),
+			PSL:     toHexString(getBits(descriptor.Header.Flmap2, 8, 15),4),
+			FMSBA:   toHexString(getBits(descriptor.Header.Flmap2, 0, 7) << 4,0),
 		},
 		RESERVED: descriptor.Header.Reserved,
 		FLUMAP1: FlashDescriptorHeaderFLUMAP1{
-			VTBA: toHexString(getBits(descriptor.Header.Flumap1, 0, 7) << 4),
+			VTL: getBits(descriptor.Header.Flmap1, 7, 15),
+			VTBA: toHexString(getBits(descriptor.Header.Flumap1, 0, 7) << 4,6),
 		},
 	}
 
@@ -58,8 +59,8 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 		var regionData = descriptor.FR.Flreg[i]
 
 		rs := RegionSectionEntry{
-			START: toHexString((regionData & base_mask) << 12),
-			END:   toHexString(((regionData & limit_mask) >> 4) | 0xfff),
+			START: toHexString((regionData & base_mask) << 12,8),
+			END:   toHexString(((regionData & limit_mask) >> 4) | 0xfff,8),
 		}
 
 		switch i {
@@ -87,11 +88,11 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 			break
 
 		case 6:
-			fd.REGION.RESERVED1 = rs
+			fd.REGION.RESERVED2 = rs
 			break
 
 		case 7:
-			fd.REGION.RESERVED2 = rs
+			fd.REGION.RESERVED3 = rs
 			break
 
 		case 8:
@@ -118,19 +119,19 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 		},
 		//TODO deside based on IFD version
 		FLILL: ComponentSectionFLILL{
-			InvalidInstruction0: toHexString(getBits(descriptor.FC.Flill, 0, 7)),
-			InvalidInstruction1: toHexString(getBits(descriptor.FC.Flill, 8, 15)),
-			InvalidInstruction2: toHexString(getBits(descriptor.FC.Flill, 16, 23)),
-			InvalidInstruction3: toHexString(getBits(descriptor.FC.Flill, 24, 31)),
+			InvalidInstruction0: toHexString(getBits(descriptor.FC.Flill, 0, 7),2),
+			InvalidInstruction1: toHexString(getBits(descriptor.FC.Flill, 8, 15),2),
+			InvalidInstruction2: toHexString(getBits(descriptor.FC.Flill, 16, 23),2),
+			InvalidInstruction3: toHexString(getBits(descriptor.FC.Flill, 24, 31),2),
 		},
 		FLPB: ComponentSectionFLPB{
-			FlashPartitionBoundaryAddress: toHexString(getBits(descriptor.FC.Flpb, 0, 15) << 12),
+			FlashPartitionBoundaryAddress: toHexString(getBits(descriptor.FC.Flpb, 0, 15) << 12,8),
 		},
 	}
 	fd.COMPONENT = cs
 
 	for i := 0; i < len(descriptor.FPS.Pchstrp); i++ {
-		fd.PCHSTRAP[i] = toHexString(descriptor.FPS.Pchstrp[i])
+		fd.PCHSTRAP[i] = toHexString(descriptor.FPS.Pchstrp[i],8)
 	}
 
 	fd.MASTER = MasterSection{
@@ -142,18 +143,18 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 	}
 
 	for index, element := range descriptor.FMS.Data {
-		fd.STRAP[index] = toHexString(element)
+		fd.STRAP[index] = toHexString(element,8 )
 	}
 
 	for i := 0; i < len(descriptor.VSCC); i++ {
 		Vscc := descriptor.VSCC[i]
 		var mfc MEFlashControl
 
-		mfc.COMPONENT.DeviceID0 = toHexString(getBits(Vscc.Jid, 8, 15))
-		mfc.COMPONENT.DeviceID1 = toHexString(getBits(Vscc.Jid, 16, 23))
-		mfc.COMPONENT.VendorID = toHexString(getBits(Vscc.Jid, 0, 7))
+		mfc.COMPONENT.DeviceID0 = toHexString(getBits(Vscc.Jid, 8, 15),2)
+		mfc.COMPONENT.DeviceID1 = toHexString(getBits(Vscc.Jid, 16, 23),2)
+		mfc.COMPONENT.VendorID = toHexString(getBits(Vscc.Jid, 0, 7),2)
 
-		mfc.CONTROL.LowerEraseOpcode = toHexString(getBits(Vscc.Vscc, 24, 31))
+		mfc.CONTROL.LowerEraseOpcode = toHexString(getBits(Vscc.Vscc, 24, 31),2)
 		if Vscc.Vscc&(1<<20) != 0 {
 			mfc.CONTROL.LowerWriteEnableOnWriteStatus = "0x06"
 		} else {
@@ -186,7 +187,7 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 			break
 		}
 
-		mfc.CONTROL.UpperEraseOpcode = toHexString(getBits(Vscc.Vscc, 8, 15))
+		mfc.CONTROL.UpperEraseOpcode = toHexString(getBits(Vscc.Vscc, 8, 15),2)
 		if Vscc.Vscc&(1<<4) != 0 {
 			mfc.CONTROL.UpperWriteEnableOnWriteStatus = "0x06"
 		} else {
@@ -339,7 +340,7 @@ func parseFLMSTR(flmstr uint32) MasterSectionEntry {
 		PlatformDataRegionWriteAccess: isBitSet(flmstr, wr_shift+4),
 		ECRegionReadAccess:            isBitSet(flmstr, rd_shift+8),
 		ECRegionWriteAccess:           isBitSet(flmstr, wr_shift+8),
-		RequesterID:                   toHexString(getBits(flmstr, 0, 15)),
+		RequesterID:                   toHexString(getBits(flmstr, 0, 15),8),
 	}
 	return entry
 }
@@ -348,8 +349,9 @@ func isBitSet(val uint32, bit uint32) bool {
 	return (val & (1 << bit)) != 0
 }
 
-func toHexString(val uint32) string {
-	return fmt.Sprintf("0x%08X", val)
+func toHexString(val uint32,zeroFilll uint32) string {
+	formatString := fmt.Sprintf("0x%%0%dX", zeroFilll)
+	return fmt.Sprintf(formatString, val)
 }
 
 func getBits(val uint32, start uint8, end uint8) uint32 {

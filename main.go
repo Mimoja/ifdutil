@@ -1,34 +1,44 @@
 package main
 
+/**
+ifdutil Copyright (C) 2018 Mimoja <git@mimoja.de>
+Based on ifdtool Copyright (C) 2011 Google Inc
+ */
 import (
-	"fmt"
-	"os"
 	"encoding/json"
 	"flag"
-	"strconv"
+	"fmt"
 	"io/ioutil"
+	"os"
+	"strconv"
 )
 
 func main() {
 
+	fmt.Printf("ifdutil v%s -- Copyright (C) 2018 Mimoja <git@mimoja.de>.\n\n", "0.1.0");
+		fmt.Print("This program is free software: you can redistribute it and/or modify\n"+
+		"it under the terms of the GNU General Public License as published by\n"+
+		"the Free Software Foundation, version 2 of the License.\n\n"+
+		"This program is distributed in the hope that it will be useful,\n"+
+		"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"+
+		"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"+
+		"GNU General Public License for more details.\n\n");
+
+
+
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", " ")
 
-
-	//legacyDump := flag.Bool("fork", false, "a bool")
+	legacyDump := flag.Bool("dump", false, "dump in original ifdtool format (includes some new fields)")
 	layout := flag.String("layout", "", "dump regions into a flashrom layout file")
 	extract := flag.Bool("extract", false, "extract intel fd modules")
 
 	flag.Parse()
 
-
 	argsWithProg := flag.Args()
-	fmt.Println("Supplied arguments:")
-	fmt.Println(argsWithProg)
 
-
-	if(len(argsWithProg) == 0){
-		panic("Please supply a flashimage to open")
+	if len(argsWithProg) == 0 {
+		panic("Please supply a flashimage or configfile to open")
 	}
 
 	f, err := os.Open(argsWithProg[0])
@@ -39,63 +49,186 @@ func main() {
 	fd := readBinaryIFD(f, 0x10)
 	pfd := parseBinary(fd)
 
-
-	if(*layout != ""){
+	if *layout != "" {
 		var layoutString string
-		layoutString+= printLayout(pfd.REGION.FLASH, "fd")
-		layoutString+= printLayout(pfd.REGION.BIOS, "bios")
-		layoutString+= printLayout(pfd.REGION.ME, "me")
-		layoutString+= printLayout(pfd.REGION.ETHERNET, "gbe")
-		layoutString+= printLayout(pfd.REGION.PLATFORM, "pd")
-		layoutString+= printLayout(pfd.REGION.EXPANSION, "res1")
-		layoutString+= printLayout(pfd.REGION.RESERVED1, "res2")
-		layoutString+= printLayout(pfd.REGION.RESERVED2, "res3")
-		layoutString+= printLayout(pfd.REGION.EC, "ec")
-
+		for i := 0; i < 9; i++ {
+			region, shortname, _, _ := getRegionByNumber(pfd, i)
+			layoutString += printLayout(region, shortname)
+		}
 		ioutil.WriteFile(*layout, []byte(layoutString), 0644)
 	}
 
-	if(*extract){
-		writeRegionToFile("_flashregion_0_flashdescriptor.bin", readRegion(f, pfd.REGION.FLASH))
-		writeRegionToFile("_flashregion_1_bios.bin",readRegion(f,pfd.REGION.BIOS))
-		writeRegionToFile("_flashregion_2_intel_me.bin",readRegion(f,pfd.REGION.ME))
-		writeRegionToFile("_flashregion_3_gbe.bin",readRegion(f,pfd.REGION.ETHERNET))
-		writeRegionToFile("_flashregion_4_platform_data.bin",readRegion(f,pfd.REGION.PLATFORM))
-		writeRegionToFile("_flashregion_5_reserved.bin",readRegion(f,pfd.REGION.EXPANSION))
-		writeRegionToFile("_flashregion_6_reserved.bin",readRegion(f,pfd.REGION.RESERVED1))
-		writeRegionToFile("_flashregion_7_reserved.bin",readRegion(f,pfd.REGION.RESERVED2))
-		writeRegionToFile("_flashregion_8_ec.bin",readRegion(f,pfd.REGION.EC))
+	if *extract {
+		for i := 0; i < 9; i++ {
+			region, _, longname, _ := getRegionByNumber(pfd, i)
+			filename := fmt.Sprintf("flashregion_%d_%s.bin", i, longname)
+			writeRegionToFile(filename, readRegion(f, region))
+		}
+	}
+
+	if *legacyDump {
+		fmt.Printf("FLMAP0:    0x%08x\n", fd.Header.Flmap0)
+		fmt.Printf("  NR:      %d\n", pfd.HEADER.FLMAP0.NR)
+		fmt.Printf("  FRBA:    %s\n", pfd.HEADER.FLMAP0.FRBA)
+		fmt.Printf("  NC:      %d\n", pfd.HEADER.FLMAP0.NC)
+		fmt.Printf("  FCBA:    %s\n", pfd.HEADER.FLMAP0.FCBA)
+
+		fmt.Printf("FLMAP1:    0x%08x\n", fd.Header.Flmap1)
+		fmt.Printf("  ISL:     %s\n", pfd.HEADER.FLMAP1.ISL)
+		fmt.Printf("  FPSBA:   %s\n", pfd.HEADER.FLMAP1.FPSBA)
+		fmt.Printf("  NM:      %d\n", pfd.HEADER.FLMAP1.NM)
+		fmt.Printf("  FMBA:    %s\n", pfd.HEADER.FLMAP1.FMBA)
+
+		fmt.Printf("FLMAP2:    0x%08x\n", fd.Header.Flmap2)
+		fmt.Printf("  RIL:     %s\n", pfd.HEADER.FLMAP2.RIL)
+		fmt.Printf("  ICCRIBA: %s\n", pfd.HEADER.FLMAP2.ICCRIBA)
+		fmt.Printf("  PSL:     %s\n", pfd.HEADER.FLMAP2.PSL)
+		fmt.Printf("  FMSBA:   %s\n", pfd.HEADER.FLMAP2.FMSBA)
+
+		fmt.Printf("FLUMAP1:   0x%08x\n", fd.Header.Flumap1)
+		fmt.Printf("  Intel ME VSCC Table Length (VTL):        %d\n",
+			pfd.HEADER.FLUMAP1.VTL)
+		fmt.Printf("  Intel ME VSCC Table Base Address (VTBA): %s\n\n",
+			pfd.HEADER.FLUMAP1.VTBA)
+
+		// dumpt VSCC
+		fmt.Printf("ME VSCC table:\n")
+		for i := uint32(0); i < pfd.HEADER.FLUMAP1.VTL; i++ {
+			fmt.Printf("  JID%d:  0x%08x\n", i, fd.VSCC[i].Jid)
+			fmt.Printf("    SPI Componend Device ID 1:          %s\n", pfd.FLASHCONTROL[i].COMPONENT.DeviceID1)
+			fmt.Printf("    SPI Componend Device ID 0:          %s\n", pfd.FLASHCONTROL[i].COMPONENT.DeviceID0)
+			fmt.Printf("    SPI Componend Vendor ID:            %s\n", pfd.FLASHCONTROL[i].COMPONENT.VendorID)
+
+			fmt.Printf("  VSCC%d: 0x%08x\n", i, fd.VSCC[i].Vscc)
+			fmt.Printf("    Lower Erase Opcode:                 %s\n", pfd.FLASHCONTROL[i].CONTROL.LowerEraseOpcode)
+			fmt.Printf("    Lower Write Enable on Write Status: %s\n", pfd.FLASHCONTROL[i].CONTROL.LowerWriteEnableOnWriteStatus)
+			fmt.Printf("    Lower Write Status Required:        %v\n", pfd.FLASHCONTROL[i].CONTROL.LowerWriteStatusRequired)
+			fmt.Printf("    Lower Write Granularity:            %d bytes\n", pfd.FLASHCONTROL[i].CONTROL.LowerWriteGranularity)
+			fmt.Printf("    Lower Block / Sector Erase Size:    %s\n", pfd.FLASHCONTROL[i].CONTROL.LowerBlockAndSectorEraseSize)
+			fmt.Printf("    Upper Erase Opcode:                 %s\n", pfd.FLASHCONTROL[i].CONTROL.UpperEraseOpcode)
+			fmt.Printf("    Upper Write Enable on Write Status: %s\n", pfd.FLASHCONTROL[i].CONTROL.UpperWriteEnableOnWriteStatus)
+			fmt.Printf("    Upper Write Status Required:        %v\n", pfd.FLASHCONTROL[i].CONTROL.UpperWriteStatusRequired)
+			fmt.Printf("    Upper Write Granularity:            %d bytes\n", pfd.FLASHCONTROL[i].CONTROL.UpperWriteGranularity)
+			fmt.Printf("    Upper Block / Sector Erase Size:    %s\n", pfd.FLASHCONTROL[i].CONTROL.UpperBlockAndSectorEraseSize)
+		}
+		fmt.Printf("\n")
+
+		// dump oem
+		fmt.Printf("OEM Section:\n")
+		for i := 0; i < 4; i++ {
+			fmt.Printf("%02x:", i<<4)
+			for j := 0; j < 16; j++ {
+				fmt.Printf(" %02x", pfd.OEM[(i<<4)+j])
+			}
+
+			fmt.Printf("\n")
+		}
+		fmt.Printf("\n")
+
+		// dump FR
+		//TODO depend on ifd version
+		fmt.Printf("Found Region Section\n")
+		for i := 0; i < 9; i++ {
+			fmt.Printf("FLREG%d:    0x%08x\n", i, fd.FR.Flreg[i])
+			region, _, _, description := getRegionByNumber(pfd, i)
+			base, limit, unused := getRegionLimits(region)
+			unusedString := ""
+			if unused {
+				unusedString = "(unused)"
+			}
+			fmt.Printf("  Flash Region %d (%s): %08x - %08x %s\n",
+				i, description, base, limit, unusedString)
+
+		}
+		fmt.Printf("\n")
+		fmt.Printf("Found Component Section\n")
+		fmt.Printf("FLCOMP     0x%08x\n", fd.FC.Flcomp)
+		fmt.Printf("  Dual Output Fast Read Support:       %v\n", pfd.COMPONENT.FLCOMP.DualOutputFastReadSupport)
+		fmt.Printf("  Read ID/Read Status Clock Frequency: %d\n", pfd.COMPONENT.FLCOMP.ReadIDStatusClockFrequency)
+		fmt.Printf("  Write/Erase Clock Frequency:         %d\n", pfd.COMPONENT.FLCOMP.WriteEraseClockFrequency)
+		fmt.Printf("  Fast Read Clock Frequency:           %d\n", pfd.COMPONENT.FLCOMP.FastReadClockFrequency)
+		fmt.Printf("  Fast Read Support:                   %v\n", pfd.COMPONENT.FLCOMP.FastReadSupport)
+		fmt.Printf("  Read Clock Frequency:                %d\n", pfd.COMPONENT.FLCOMP.ReadClockFrequency)
+
+		fmt.Printf("  Component 2 Density:                 %d\n", pfd.COMPONENT.FLCOMP.Component2Density)
+		fmt.Printf("  Component 1 Density:                 %d\n", pfd.COMPONENT.FLCOMP.Component1Density)
+
+		fmt.Printf("FLILL      0x%08x\n", fd.FC.Flill)
+		fmt.Printf("  Invalid Instruction 3: %s\n", pfd.COMPONENT.FLILL.InvalidInstruction3)
+		fmt.Printf("  Invalid Instruction 2: %s\n", pfd.COMPONENT.FLILL.InvalidInstruction2)
+		fmt.Printf("  Invalid Instruction 1: %s\n", pfd.COMPONENT.FLILL.InvalidInstruction1)
+		fmt.Printf("  Invalid Instruction 0: %s\n", pfd.COMPONENT.FLILL.InvalidInstruction0)
+		fmt.Printf("FLPB       0x%08x\n", fd.FC.Flpb)
+		fmt.Printf("  Flash Partition Boundary Address: %s\n\n",
+			pfd.COMPONENT.FLPB.FlashPartitionBoundaryAddress)
+
+		fmt.Printf("Found PCH Strap Section\n")
+		for i, elem := range pfd.PCHSTRAP {
+			fmt.Printf("PCHSTRP%02d: %s\n", i, elem)
+		}
+
+		fmt.Printf("\n")
+
+
+		fmt.Printf("Found Master Section\n");
+		for i := 0 ; i < 5 ; i++ {
+			section, name := getMasterSectionByNumber(pfd, i)
+			fmt.Printf("FLMSTR%d:   (%s)\n", i, name);
+			fmt.Printf("  EC Region Write Access:            %v\n",section.ECRegionWriteAccess)
+			fmt.Printf("  Platform Data Region Write Access: %v\n",section.PlatformDataRegionWriteAccess)
+			fmt.Printf("  GbE Region Write Access:           %v\n",section.GbERegionWriteAccess)
+			fmt.Printf("  Intel ME Region Write Access:      %v\n",section.IntelMERegionWriteAccess);
+			fmt.Printf("  Host CPU/BIOS Region Write Access: %v\n",section.HostCPUBIOSRegionWriteAccess);
+			fmt.Printf("  Flash Descriptor Write Access:     %v\n",section.FlashDescriptorWriteAccess);
+
+			fmt.Printf("  EC Region Read Access:             %v\n",section.ECRegionReadAccess);
+			fmt.Printf("  Platform Data Region Read Access:  %v\n",section.PlatformDataRegionReadAccess);
+			fmt.Printf("  GbE Region Read Access:            %v\n",section.GbERegionReadAccess);
+			fmt.Printf("  Intel ME Region Read Access:       %v\n",section.IntelMERegionReadAccess);
+			fmt.Printf("  Host CPU/BIOS Region Read Access:  %v\n",section.HostCPUBIOSRegionReadAccess);
+			fmt.Printf("  Flash Descriptor Read Access:      %v\n",section.FlashDescriptorReadAccess);
+			fmt.Printf("\n")
+		}
+		fmt.Printf("\n")
+
+
+		fmt.Printf("Found Processor Strap Section\n");
+		for _, elem := range pfd.STRAP {
+			fmt.Printf("????:      %s\n", elem);
+		}
+
 	}
 
 	//enc.Encode(fd)
 	//enc.Encode(pfd)
 }
-func getRegionLimits(region RegionSectionEntry) (int64, int64, bool){
+func getRegionLimits(region RegionSectionEntry) (int64, int64, bool) {
 	start, _ := strconv.ParseInt(region.START, 0, 64)
 	end, _ := strconv.ParseInt(region.END, 0, 64)
 	error, _ := strconv.ParseInt("0x00FFF000", 0, 64)
 
 	iserror := start >= error || start >= end
 
+	//TODO is  (start | error) always 0x00FFFFFF when unused?
+
 	return start, end, iserror
 }
 
-func printLayout(region RegionSectionEntry, name string) string{
+func printLayout(region RegionSectionEntry, name string) string {
 
 	start, end, error := getRegionLimits(region)
 
-
-	if(!error){
+	if !error {
 		return fmt.Sprintf("%08x:%08x %s\n", start, end, name)
 	}
 	return ""
 }
 
-func readRegion(file *os.File, region RegionSectionEntry, ) []byte {
+func readRegion(file *os.File, region RegionSectionEntry) []byte {
 
 	start, end, error := getRegionLimits(region)
 
-	if(error){
+	if error {
 		return nil
 	}
 
@@ -110,8 +243,8 @@ func readRegion(file *os.File, region RegionSectionEntry, ) []byte {
 	return bytes
 }
 
-func writeRegionToFile(filename string, data []byte){
-	if(data != nil){
+func writeRegionToFile(filename string, data []byte) {
+	if data != nil {
 		ioutil.WriteFile(filename, data, 0644)
 	}
 }
