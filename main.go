@@ -3,8 +3,10 @@ package main
 /**
 ifdutil Copyright (C) 2018 Mimoja <git@mimoja.de>
 Based on ifdtool Copyright (C) 2011 Google Inc
- */
+*/
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,16 +17,14 @@ import (
 
 func main() {
 
-	fmt.Printf("ifdutil v%s -- Copyright (C) 2018 Mimoja <git@mimoja.de>.\n\n", "0.1.0");
-		fmt.Print("This program is free software: you can redistribute it and/or modify\n"+
-		"it under the terms of the GNU General Public License as published by\n"+
-		"the Free Software Foundation, version 2 of the License.\n\n"+
-		"This program is distributed in the hope that it will be useful,\n"+
-		"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"+
-		"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"+
-		"GNU General Public License for more details.\n\n");
-
-
+	fmt.Printf("ifdutil v%s -- Copyright (C) 2018 Mimoja <git@mimoja.de>.\n\n", "0.1.0")
+	fmt.Print("This program is free software: you can redistribute it and/or modify\n" +
+		"it under the terms of the GNU General Public License as published by\n" +
+		"the Free Software Foundation, version 2 of the License.\n\n" +
+		"This program is distributed in the hope that it will be useful,\n" +
+		"but WITHOUT ANY WARRANTY; without even the implied warranty of\n" +
+		"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n" +
+		"GNU General Public License for more details.\n\n")
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", " ")
@@ -48,6 +48,9 @@ func main() {
 
 	fd := readBinaryIFD(f, 0x10)
 	pfd := parseBinary(fd)
+
+	nfd := parseKomplex(pfd)
+	writeFDtoFile(nfd, fromString(pfd.REGION.FLASH.END))
 
 	if *layout != "" {
 		var layoutString string
@@ -169,32 +172,30 @@ func main() {
 
 		fmt.Printf("\n")
 
-
-		fmt.Printf("Found Master Section\n");
-		for i := 0 ; i < 5 ; i++ {
+		fmt.Printf("Found Master Section\n")
+		for i := 0; i < 5; i++ {
 			section, name := getMasterSectionByNumber(pfd, i)
-			fmt.Printf("FLMSTR%d:   (%s)\n", i, name);
-			fmt.Printf("  EC Region Write Access:            %v\n",section.ECRegionWriteAccess)
-			fmt.Printf("  Platform Data Region Write Access: %v\n",section.PlatformDataRegionWriteAccess)
-			fmt.Printf("  GbE Region Write Access:           %v\n",section.GbERegionWriteAccess)
-			fmt.Printf("  Intel ME Region Write Access:      %v\n",section.IntelMERegionWriteAccess);
-			fmt.Printf("  Host CPU/BIOS Region Write Access: %v\n",section.HostCPUBIOSRegionWriteAccess);
-			fmt.Printf("  Flash Descriptor Write Access:     %v\n",section.FlashDescriptorWriteAccess);
+			fmt.Printf("FLMSTR%d:   (%s)\n", i, name)
+			fmt.Printf("  EC Region Write Access:            %v\n", section.ECRegionWriteAccess)
+			fmt.Printf("  Platform Data Region Write Access: %v\n", section.PlatformDataRegionWriteAccess)
+			fmt.Printf("  GbE Region Write Access:           %v\n", section.GbERegionWriteAccess)
+			fmt.Printf("  Intel ME Region Write Access:      %v\n", section.IntelMERegionWriteAccess)
+			fmt.Printf("  Host CPU/BIOS Region Write Access: %v\n", section.HostCPUBIOSRegionWriteAccess)
+			fmt.Printf("  Flash Descriptor Write Access:     %v\n", section.FlashDescriptorWriteAccess)
 
-			fmt.Printf("  EC Region Read Access:             %v\n",section.ECRegionReadAccess);
-			fmt.Printf("  Platform Data Region Read Access:  %v\n",section.PlatformDataRegionReadAccess);
-			fmt.Printf("  GbE Region Read Access:            %v\n",section.GbERegionReadAccess);
-			fmt.Printf("  Intel ME Region Read Access:       %v\n",section.IntelMERegionReadAccess);
-			fmt.Printf("  Host CPU/BIOS Region Read Access:  %v\n",section.HostCPUBIOSRegionReadAccess);
-			fmt.Printf("  Flash Descriptor Read Access:      %v\n",section.FlashDescriptorReadAccess);
+			fmt.Printf("  EC Region Read Access:             %v\n", section.ECRegionReadAccess)
+			fmt.Printf("  Platform Data Region Read Access:  %v\n", section.PlatformDataRegionReadAccess)
+			fmt.Printf("  GbE Region Read Access:            %v\n", section.GbERegionReadAccess)
+			fmt.Printf("  Intel ME Region Read Access:       %v\n", section.IntelMERegionReadAccess)
+			fmt.Printf("  Host CPU/BIOS Region Read Access:  %v\n", section.HostCPUBIOSRegionReadAccess)
+			fmt.Printf("  Flash Descriptor Read Access:      %v\n", section.FlashDescriptorReadAccess)
 			fmt.Printf("\n")
 		}
 		fmt.Printf("\n")
 
-
-		fmt.Printf("Found Processor Strap Section\n");
+		fmt.Printf("Found Processor Strap Section\n")
 		for _, elem := range pfd.STRAP {
-			fmt.Printf("????:      %s\n", elem);
+			fmt.Printf("????:      %s\n", elem)
 		}
 
 	}
@@ -247,4 +248,45 @@ func writeRegionToFile(filename string, data []byte) {
 	if data != nil {
 		ioutil.WriteFile(filename, data, 0644)
 	}
+}
+
+func writeFDtoFile(fd BinaryFlashDescriptor, len uint32) {
+
+	fmt.Println("Writing testfd.bin")
+
+	f, err := os.Create("testfd.bin")
+	defer f.Close()
+
+	if err != nil {
+		panic(err)
+	}
+
+	b := make([]byte, 1)
+	b[0] = 0xff
+
+	prefix := bytes.Repeat(b, int(fd.HeaderOffset))
+	f.Write(prefix)
+
+	writeField(f, fd.Header)
+
+	f.Seek(0xF00, 0)
+	writeField(f, fd.OEM)
+
+	postfix_len := len - (0xF00 + 64) + 1
+	postfix := bytes.Repeat(b, int(postfix_len))
+	f.Write(postfix)
+}
+
+func writeField(file *os.File, data interface{}) {
+
+	var bin_buf bytes.Buffer
+
+	binary.Write(&bin_buf, binary.LittleEndian, data)
+
+	_, err := file.Write(bin_buf.Bytes())
+
+	if err != nil {
+		panic(err)
+	}
+
 }

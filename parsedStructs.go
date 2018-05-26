@@ -1,6 +1,7 @@
 package main
 
 type FlashDescriptor struct {
+	HeaderOffset uint32
 	HEADER       FlashDescriptorHeader
 	OEM          [0x40]uint8
 	FLASHCONTROL []MEFlashControl
@@ -47,6 +48,7 @@ type FlashDescriptorHeaderFLMAP2 struct {
 	FMSBA     string
 }
 type FlashDescriptorHeaderFLUMAP1 struct {
+	RESERVED0 uint32
 	VTL   uint32
 	VTBA string
 }

@@ -8,6 +8,7 @@ import (
 )
 
 type BinaryFlashDescriptor struct {
+	HeaderOffset uint32
 	Header BinaryFlashDescriptorHeader
 	OEM    [0x40]uint8
 	FR     BinaryFR
@@ -66,6 +67,7 @@ func readBinaryIFD(f *os.File, offset int64) BinaryFlashDescriptor{
 	fmt.Println("Reading FD")
 	f.Seek(offset, 0)
 
+	FlashDescriptor.HeaderOffset = uint32(offset)
 	FlashDescriptor.Header = readIFDHeader(f)
 
 	frba := ((FlashDescriptor.Header.Flmap0 >> 16) & 0xFF) << 4
