@@ -17,7 +17,7 @@ type FlashDescriptorHeader struct {
 	FLMAP0   FlashDescriptorHeaderFLMAP0
 	FLMAP1   FlashDescriptorHeaderFLMAP1
 	FLMAP2   FlashDescriptorHeaderFLMAP2
-	RESERVED [(0xefc - 0x20)/4]uint32
+	RESERVED [(0xefc - 0x20) / 4]uint32
 	FLUMAP1  FlashDescriptorHeaderFLUMAP1
 }
 
@@ -42,15 +42,15 @@ type FlashDescriptorHeaderFLMAP1 struct {
 }
 
 type FlashDescriptorHeaderFLMAP2 struct {
-	RIL       string
-	ICCRIBA   string
-	PSL       string
-	FMSBA     string
+	RIL     string
+	ICCRIBA string
+	PSL     string
+	FMSBA   string
 }
 type FlashDescriptorHeaderFLUMAP1 struct {
 	RESERVED0 uint32
-	VTL   uint32
-	VTBA string
+	VTL       uint32
+	VTBA      string
 }
 type MEFlashControl struct {
 	COMPONENT MEFlashControlComponent
@@ -85,22 +85,21 @@ type MasterSection struct {
 }
 
 type MasterSectionEntry struct {
-	FlashDescriptorReadAccess bool
-	FlashDescriptorWriteAccess bool
-	HostCPUBIOSRegionReadAccess bool
-	HostCPUBIOSRegionWriteAccess bool
-	IntelMERegionReadAccess bool
-	IntelMERegionWriteAccess bool
-	GbERegionReadAccess bool
-	GbERegionWriteAccess bool
-	PlatformDataRegionReadAccess bool
+	FlashDescriptorReadAccess     bool
+	FlashDescriptorWriteAccess    bool
+	HostCPUBIOSRegionReadAccess   bool
+	HostCPUBIOSRegionWriteAccess  bool
+	IntelMERegionReadAccess       bool
+	IntelMERegionWriteAccess      bool
+	GbERegionReadAccess           bool
+	GbERegionWriteAccess          bool
+	PlatformDataRegionReadAccess  bool
 	PlatformDataRegionWriteAccess bool
-	ECRegionReadAccess bool
-	ECRegionWriteAccess bool
+	ECRegionReadAccess            bool
+	ECRegionWriteAccess           bool
 
 	RequesterID string
 }
-
 
 type RegionSection struct {
 	FLASH     RegionSectionEntry
@@ -117,24 +116,24 @@ type RegionSection struct {
 
 type RegionSectionEntry struct {
 	START string
-	END  string
+	END   string
 }
 
 type ComponentSection struct {
 	FLCOMP ComponentSectionFLCOMP
-	FLILL ComponentSectionFLILL
-	FLPB ComponentSectionFLPB
+	FLILL  ComponentSectionFLILL
+	FLPB   ComponentSectionFLPB
 }
 
 type ComponentSectionFLCOMP struct {
-	DualOutputFastReadSupport bool
+	DualOutputFastReadSupport  bool
 	ReadIDStatusClockFrequency uint32
-	WriteEraseClockFrequency uint32
-	FastReadClockFrequency uint32
-	FastReadSupport bool
-	ReadClockFrequency uint32
-	Component1Density uint32
-	Component2Density uint32
+	WriteEraseClockFrequency   uint32
+	FastReadClockFrequency     uint32
+	FastReadSupport            bool
+	ReadClockFrequency         uint32
+	Component1Density          uint32
+	Component2Density          uint32
 }
 
 type ComponentSectionFLILL struct {
@@ -148,29 +147,43 @@ type ComponentSectionFLPB struct {
 	FlashPartitionBoundaryAddress string
 }
 
-func getRegionByNumber(pfd FlashDescriptor, index int) (RegionSectionEntry, string , string, string){
+func getRegionByNumber(pfd FlashDescriptor, index int) (RegionSectionEntry, string, string, string) {
 	switch index {
-	case 0: return pfd.REGION.FLASH, "fd", "flashdescriptor", "Flash Descriptor"
-	case 1: return pfd.REGION.BIOS, "bios", "bios", "Bios"
-	case 2: return pfd.REGION.ME, "me", "intel_me", "Intel ME"
-	case 3: return pfd.REGION.ETHERNET, "gbe", "gbe", "Ethernet"
-	case 4: return pfd.REGION.PLATFORM, "pd" , "platform_data", "Platform Data"
-	case 5: return pfd.REGION.EXPANSION, "res1", "reserved1", "Expansion / Reserved1"
-	case 6: return pfd.REGION.RESERVED2, "res2", "reserved2", "Reserved 2"
-	case 7: return pfd.REGION.RESERVED3, "res3", "reserved3", "Reserved 3"
-	case 8: return pfd.REGION.EC, "ec", "ec", "Embedded Controler"
+	case 0:
+		return pfd.REGION.FLASH, "fd", "flashdescriptor", "Flash Descriptor"
+	case 1:
+		return pfd.REGION.BIOS, "bios", "bios", "Bios"
+	case 2:
+		return pfd.REGION.ME, "me", "intel_me", "Intel ME"
+	case 3:
+		return pfd.REGION.ETHERNET, "gbe", "gbe", "Ethernet"
+	case 4:
+		return pfd.REGION.PLATFORM, "pd", "platform_data", "Platform Data"
+	case 5:
+		return pfd.REGION.EXPANSION, "res1", "reserved1", "Expansion / Reserved1"
+	case 6:
+		return pfd.REGION.RESERVED2, "res2", "reserved2", "Reserved 2"
+	case 7:
+		return pfd.REGION.RESERVED3, "res3", "reserved3", "Reserved 3"
+	case 8:
+		return pfd.REGION.EC, "ec", "ec", "Embedded Controler"
 	}
 	panic("Unknown region index")
-	return pfd.REGION.FLASH, "","",""
+	return pfd.REGION.FLASH, "", "", ""
 }
 
-func getMasterSectionByNumber(pfd FlashDescriptor, index int) (MasterSectionEntry, string){
+func getMasterSectionByNumber(pfd FlashDescriptor, index int) (MasterSectionEntry, string) {
 	switch index {
-	case 0: return pfd.MASTER.BIOS, "Host CPU/BIOS"
-	case 1: return pfd.MASTER.ME, "Intel ME"
-	case 2:  return pfd.MASTER.ETHERNET, "Ethernet"
-	case 3:  return pfd.MASTER.RESERVED, "RESERVED"
-	case 4:  return pfd.MASTER.EC, "EC"
+	case 0:
+		return pfd.MASTER.BIOS, "Host CPU/BIOS"
+	case 1:
+		return pfd.MASTER.ME, "Intel ME"
+	case 2:
+		return pfd.MASTER.ETHERNET, "Ethernet"
+	case 3:
+		return pfd.MASTER.RESERVED, "RESERVED"
+	case 4:
+		return pfd.MASTER.EC, "EC"
 
 	}
 	panic("Unknown region index")

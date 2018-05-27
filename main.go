@@ -17,6 +17,8 @@ import (
 
 func main() {
 
+	//TODO Deal with ICCRIBA!!
+
 	fmt.Printf("ifdutil v%s -- Copyright (C) 2018 Mimoja <git@mimoja.de>.\n\n", "0.1.0")
 	fmt.Print("This program is free software: you can redistribute it and/or modify\n" +
 		"it under the terms of the GNU General Public License as published by\n" +
@@ -32,6 +34,8 @@ func main() {
 	legacyDump := flag.Bool("dump", false, "dump in original ifdtool format (includes some new fields)")
 	layout := flag.String("layout", "", "dump regions into a flashrom layout file")
 	extract := flag.Bool("extract", false, "extract intel fd modules")
+	write := flag.Bool("write", false, "Write ifd to ifd.bin")
+	findMagic := flag.Bool("magic", false, "Search image for ifd magic")
 
 	flag.Parse()
 
@@ -46,11 +50,27 @@ func main() {
 		panic(err)
 	}
 
+	if *findMagic {
+		//TODO error handle if not found!
+		for i := 0; ; i++ {
+			f.Seek(int64(i), 0)
+			header := readIFDHeader(f)
+			if header.Flvalsig == 0x0FF0A55A {
+				fmt.Printf("Found IFD Magic at 0x%08X\n", i)
+				break;
+			}
+		}
+	}
+
+	//TODO search for IFD header at position 0x00 and 0x10
+	//TODO error handle wrong / missing magic
 	fd := readBinaryIFD(f, 0x10)
 	pfd := parseBinary(fd)
 
-	nfd := parseKomplex(pfd)
-	writeFDtoFile(nfd, fromString(pfd.REGION.FLASH.END))
+	if *write {
+		filename := "ifd.bin"
+		writeFDtoFile(filename, pfd)
+	}
 
 	if *layout != "" {
 		var layoutString string
@@ -250,7 +270,9 @@ func writeRegionToFile(filename string, data []byte) {
 	}
 }
 
-func writeFDtoFile(fd BinaryFlashDescriptor, len uint32) {
+func writeFDtoFile(filaname string, pfd FlashDescriptor) {
+
+	fd := parseKomplex(pfd)
 
 	fmt.Println("Writing testfd.bin")
 
@@ -264,17 +286,72 @@ func writeFDtoFile(fd BinaryFlashDescriptor, len uint32) {
 	b := make([]byte, 1)
 	b[0] = 0xff
 
-	prefix := bytes.Repeat(b, int(fd.HeaderOffset))
+	// Fill with 0xff
+	prefix := bytes.Repeat(b, int(fromString(pfd.REGION.FLASH.END)-fromString(pfd.REGION.FLASH.START)+1))
 	f.Write(prefix)
 
+	f.Seek(int64(fd.HeaderOffset), 0)
 	writeField(f, fd.Header)
 
 	f.Seek(0xF00, 0)
 	writeField(f, fd.OEM)
 
-	postfix_len := len - (0xF00 + 64) + 1
-	postfix := bytes.Repeat(b, int(postfix_len))
-	f.Write(postfix)
+	frba := fromString(pfd.HEADER.FLMAP0.FRBA)
+	if fieldNeedsManualWrite(fd.HeaderOffset + frba) {
+		f.Seek(int64(frba), 0)
+		writeField(f, fd.FR)
+	} else {
+		fmt.Println("\tSkiping FR, already writen")
+	}
+
+	fcba := fromString(pfd.HEADER.FLMAP0.FCBA)
+	if fieldNeedsManualWrite(fd.HeaderOffset + fcba) {
+		f.Seek(int64(fcba), 0)
+		writeField(f, fd.FC)
+	} else {
+		fmt.Println("\tSkiping FC, already writen")
+	}
+
+	fpsba := fromString(pfd.HEADER.FLMAP1.FPSBA)
+	if fieldNeedsManualWrite(fd.HeaderOffset + fpsba) {
+		f.Seek(int64(fcba), 0)
+		writeField(f, fd.FPS)
+	} else {
+		fmt.Println("\tSkiping FPS, already writen")
+	}
+
+	fmba := fromString(pfd.HEADER.FLMAP1.FMBA)
+	if fieldNeedsManualWrite(fd.HeaderOffset + fmba) {
+		f.Seek(int64(fcba), 0)
+		writeField(f, fd.FM)
+	} else {
+		fmt.Println("\tSkiping FM, already writen")
+	}
+
+	fmsba := fromString(pfd.HEADER.FLMAP2.FMSBA)
+	if fieldNeedsManualWrite(fd.HeaderOffset + fmsba) {
+		f.Seek(int64(fcba), 0)
+		writeField(f, fd.FMS)
+	} else {
+		fmt.Println("\tSkiping FMS, already writen")
+	}
+
+	vsccba := fromString(pfd.HEADER.FLUMAP1.VTBA)
+	if fieldNeedsManualWrite(fd.HeaderOffset + vsccba) {
+		f.Seek(int64(vsccba), 0)
+		for i := uint32(0); i < pfd.HEADER.FLUMAP1.VTL; i++ {
+			writeField(f, fd.VSCC[i])
+		}
+	} else {
+		fmt.Println("\tSkiping VSCC, already writen")
+	}
+
+	fmt.Println("Done. \n")
+
+}
+
+func fieldNeedsManualWrite(addres uint32) bool {
+	return !(addres > 32 && addres < 32+3804)
 }
 
 func writeField(file *os.File, data interface{}) {

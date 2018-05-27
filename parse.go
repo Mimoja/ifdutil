@@ -386,11 +386,12 @@ func parseKomplex(descriptor FlashDescriptor) BinaryFlashDescriptor {
 		Flmap2: fromString(flm2.RIL)<<24 | fromString(flm2.ICCRIBA)<<16 | fromString(flm2.PSL)<<8 |
 			fromString(flm2.FMSBA)>>4,
 		Reserved: descriptor.HEADER.RESERVED,
-		Flumap1:  flum1.RESERVED0 << 16 | flum1.VTL << 8 | fromString(flum1.VTBA)>>4,
+		Flumap1:  flum1.RESERVED0<<16 | flum1.VTL<<8 | fromString(flum1.VTBA)>>4,
 	}
 
 	fd.OEM = descriptor.OEM
 
+	//TODO dont rely on reserved area for all the other structs
 	return fd
 }
 
