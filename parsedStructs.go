@@ -2,6 +2,7 @@ package main
 
 type FlashDescriptor struct {
 	HeaderOffset uint32
+	Version uint32
 	HEADER       FlashDescriptorHeader
 	OEM          [0x40]uint8
 	FLASHCONTROL []MEFlashControl
@@ -102,16 +103,15 @@ type MasterSectionEntry struct {
 }
 
 type RegionSection struct {
-	FLASH     RegionSectionEntry
-	BIOS      RegionSectionEntry
-	ME        RegionSectionEntry
-	ETHERNET  RegionSectionEntry
-	PLATFORM  RegionSectionEntry
-	EXPANSION RegionSectionEntry
-	RESERVED2 RegionSectionEntry
-	RESERVED3 RegionSectionEntry
-	EC        RegionSectionEntry
-	//RESERVED3 RegionSectionEntry 9 or 10?
+	FLASH     RegionSectionEntry `json:",omitempty"`
+	BIOS      RegionSectionEntry`json:",omitempty"`
+	ME        RegionSectionEntry`json:",omitempty"`
+	ETHERNET  RegionSectionEntry`json:",omitempty"`
+	PLATFORM  RegionSectionEntry`json:",omitempty"`
+	EXPANSION RegionSectionEntry`json:",omitempty"`
+	RESERVED2 RegionSectionEntry`json:",omitempty"`
+	RESERVED3 RegionSectionEntry`json:",omitempty"`
+	EC        RegionSectionEntry`json:",omitempty"`
 }
 
 type RegionSectionEntry struct {

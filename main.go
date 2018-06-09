@@ -50,21 +50,24 @@ func main() {
 		panic(err)
 	}
 
-	if *findMagic {
-		//TODO error handle if not found!
-		for i := 0; ; i++ {
-			f.Seek(int64(i), 0)
-			header := readIFDHeader(f)
-			if header.Flvalsig == 0x0FF0A55A {
+	var magicOffset int64
+	magicOffset = 0x10
+
+	//TODO error handle if not found!
+	for i := 0; ; i++ {
+		f.Seek(int64(i), 0)
+		header := readIFDHeader(f)
+		if header.Flvalsig == 0x0FF0A55A {
+			magicOffset = int64(i)
+			if *findMagic {
 				fmt.Printf("Found IFD Magic at 0x%08X\n", i)
-				break;
 			}
+			break;
 		}
 	}
 
-	//TODO search for IFD header at position 0x00 and 0x10
-	//TODO error handle wrong / missing magic
-	fd := readBinaryIFD(f, 0x10)
+
+	fd := readBinaryIFD(f, magicOffset)
 	pfd := parseBinary(fd)
 
 	if *write {
@@ -149,9 +152,15 @@ func main() {
 		fmt.Printf("\n")
 
 		// dump FR
-		//TODO depend on ifd version
+		var maxRegions int
+		if(fd.Version == 1){
+			maxRegions = 5
+		}else{
+			maxRegions = 9
+		}
+
 		fmt.Printf("Found Region Section\n")
-		for i := 0; i < 9; i++ {
+		for i := 0; i < maxRegions; i++ {
 			fmt.Printf("FLREG%d:    0x%08x\n", i, fd.FR.Flreg[i])
 			region, _, _, description := getRegionByNumber(pfd, i)
 			base, limit, unused := getRegionLimits(region)
@@ -221,7 +230,7 @@ func main() {
 	}
 
 	//enc.Encode(fd)
-	//enc.Encode(pfd)
+	enc.Encode(pfd)
 }
 func getRegionLimits(region RegionSectionEntry) (int64, int64, bool) {
 	start, _ := strconv.ParseInt(region.START, 0, 64)

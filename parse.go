@@ -9,6 +9,8 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 	var fd FlashDescriptor
 
 	fd.HeaderOffset = descriptor.HeaderOffset
+	fd.Version = descriptor.Version
+
 	fd.HEADER = FlashDescriptorHeader{
 		FLVALSIG: toHexString(descriptor.Header.Flvalsig, 8),
 		FLMAP0: FlashDescriptorHeaderFLMAP0{
@@ -45,17 +47,17 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 
 	fd.OEM = descriptor.OEM
 
-	// TODO depend on IFD version
-	// is it 9 or 10? or 5?
-	maxRegions := 9
+	var maxRegions int
+	var base_mask uint32
 
-	/**
-	if (ifd_version >= IFD_VERSION_2)
-		base_mask = 0x7fff;
-	else
-		base_mask = 0xfff;
-	*/
-	base_mask := uint32(0xfff)
+	if fd.Version == 1 {
+		maxRegions = 5
+		base_mask = uint32(0xfff)
+	} else {
+		maxRegions = 9
+		base_mask = uint32(0x7fff)
+	}
+
 	limit_mask := uint32(base_mask << 16)
 
 	for i := 0; i < maxRegions; i++ {
@@ -70,6 +72,7 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 		case 0:
 			fd.REGION.FLASH = rs
 			break
+
 		case 1:
 			fd.REGION.BIOS = rs
 			break
@@ -101,26 +104,28 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 		case 8:
 			fd.REGION.EC = rs
 			break
-
-			//case 9:
-			//	fd.REGION.RESERVED3 = rs
-			//	break
-
 		}
 	}
 
+	var componentSize uint8
+
+	if(fd.Version == 1){
+		componentSize = 3
+	} else {
+		componentSize = 4
+	}
 	cs := ComponentSection{
 		FLCOMP: ComponentSectionFLCOMP{
 			DualOutputFastReadSupport:  isBitSet(descriptor.FC.Flcomp, 30),
-			ReadIDStatusClockFrequency: getSPIFrequency(getBits(descriptor.FC.Flcomp, 27, 29)),
-			WriteEraseClockFrequency:   getSPIFrequency(getBits(descriptor.FC.Flcomp, 24, 26)),
-			FastReadClockFrequency:     getSPIFrequency(getBits(descriptor.FC.Flcomp, 21, 23)),
+			ReadIDStatusClockFrequency: getSPIFrequency(getBits(descriptor.FC.Flcomp, 27, 29), fd.Version),
+			WriteEraseClockFrequency:   getSPIFrequency(getBits(descriptor.FC.Flcomp, 24, 26), fd.Version),
+			FastReadClockFrequency:     getSPIFrequency(getBits(descriptor.FC.Flcomp, 21, 23), fd.Version),
 			FastReadSupport:            isBitSet(descriptor.FC.Flcomp, 20),
-			ReadClockFrequency:         getSPIFrequency(getBits(descriptor.FC.Flcomp, 17, 19)),
-			Component1Density:          getDensity(getBits(descriptor.FC.Flcomp, 0, 2)),
-			Component2Density:          getDensity(getBits(descriptor.FC.Flcomp, 3, 5)),
+			ReadClockFrequency:         getSPIFrequency(getBits(descriptor.FC.Flcomp, 17, 19), fd.Version),
+			Component1Density:          getDensity(getBits(descriptor.FC.Flcomp, 0, componentSize-1)),
+			Component2Density:          getDensity(getBits(descriptor.FC.Flcomp, componentSize, componentSize*2-1)),
 		},
-		//TODO deside based on IFD version
+
 		FLILL: ComponentSectionFLILL{
 			InvalidInstruction0: toHexString(getBits(descriptor.FC.Flill, 0, 7), 2),
 			InvalidInstruction1: toHexString(getBits(descriptor.FC.Flill, 8, 15), 2),
@@ -138,11 +143,11 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 	}
 
 	fd.MASTER = MasterSection{
-		BIOS:     parseFLMSTR(descriptor.FM.Flmstr1),
-		ME:       parseFLMSTR(descriptor.FM.Flmstr2),
-		ETHERNET: parseFLMSTR(descriptor.FM.Flmstr3),
-		RESERVED: parseFLMSTR(descriptor.FM.Flmstr4),
-		EC:       parseFLMSTR(descriptor.FM.Flmstr5),
+		BIOS:     parseFLMSTR(descriptor.FM.Flmstr1, fd.Version),
+		ME:       parseFLMSTR(descriptor.FM.Flmstr2, fd.Version),
+		ETHERNET: parseFLMSTR(descriptor.FM.Flmstr3, fd.Version),
+		RESERVED: parseFLMSTR(descriptor.FM.Flmstr4, fd.Version),
+		EC:       parseFLMSTR(descriptor.FM.Flmstr5, fd.Version),
 	}
 
 	for index, element := range descriptor.FMS.Data {
@@ -229,7 +234,7 @@ func parseBinary(descriptor BinaryFlashDescriptor) FlashDescriptor {
 	return fd
 }
 
-func getSPIFrequency(freq uint32) uint32 {
+func getSPIFrequency(freq uint32, ifdversion uint32) uint32 {
 
 	SPI_FREQUENCY_20MHZ := 0
 	SPI_FREQUENCY_33MHZ := 1
@@ -248,16 +253,12 @@ func getSPIFrequency(freq uint32) uint32 {
 		return 48
 		break
 	case SPI_FREQUENCY_50MHZ_30MHZ:
-		return 50
-		/*
-			//TODO fix IFD version check
-			switch (ifd_version) {
-				case IFD_VERSION_1:
-				return 50
-				case IFD_VERSION_2:
-				return 30
-			}
-		*/
+		// this can technically never happen, as long as the IFD version is guessed!
+		if ifdversion == 1 {
+			return 30
+		} else {
+			return 50
+		}
 		break
 	case SPI_FREQUENCY_17MHZ:
 		return 17
@@ -309,26 +310,23 @@ func getDensity(density uint32) uint32 {
 	return 0xFFFFFFFF
 }
 
-func parseFLMSTR(flmstr uint32) MasterSectionEntry {
-	FLMSTR_WR_SHIFT_V1 := 24
-	FLMSTR_RD_SHIFT_V1 := 16
+func parseFLMSTR(flmstr uint32, ifdVersion uint32) MasterSectionEntry {
+	var wr_shift uint32
+	var rd_shift uint32
 
-	//FLMSTR_WR_SHIFT_V2 := 20
-	//FLMSTR_RD_SHIFT_V2 := 8
+	FLMSTR_WR_SHIFT_V1 := uint32(24)
+	FLMSTR_RD_SHIFT_V1 := uint32(16)
 
-	// TODO IFD Version
-	/*
-		if (ifd_version >= IFD_VERSION_2) {
-			wr_shift = FLMSTR_WR_SHIFT_V2;
-			rd_shift = FLMSTR_RD_SHIFT_V2;
-		} else {
-			wr_shift := FLMSTR_WR_SHIFT_V1;
-			rd_shift := FLMSTR_RD_SHIFT_V1;
-		}
-	*/
+	FLMSTR_WR_SHIFT_V2 := uint32(20)
+	FLMSTR_RD_SHIFT_V2 := uint32(8)
 
-	wr_shift := uint32(FLMSTR_WR_SHIFT_V1)
-	rd_shift := uint32(FLMSTR_RD_SHIFT_V1)
+	if ifdVersion == 1 {
+		wr_shift = FLMSTR_WR_SHIFT_V1
+		rd_shift = FLMSTR_RD_SHIFT_V1
+	} else {
+		wr_shift = FLMSTR_WR_SHIFT_V2
+		rd_shift = FLMSTR_RD_SHIFT_V2
+	}
 
 	entry := MasterSectionEntry{
 		FlashDescriptorReadAccess:     isBitSet(flmstr, rd_shift+0),
@@ -370,6 +368,7 @@ func getBits(val uint32, start uint8, end uint8) uint32 {
 func parseKomplex(descriptor FlashDescriptor) BinaryFlashDescriptor {
 	var fd BinaryFlashDescriptor
 	fd.HeaderOffset = descriptor.HeaderOffset
+	fd.Version = descriptor.Version
 
 	flm0 := descriptor.HEADER.FLMAP0
 	flm1 := descriptor.HEADER.FLMAP1

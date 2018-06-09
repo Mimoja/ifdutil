@@ -9,6 +9,7 @@ import (
 
 type BinaryFlashDescriptor struct {
 	HeaderOffset uint32
+	Version uint32
 	Header       BinaryFlashDescriptorHeader
 	OEM          [0x40]uint8
 	FR           BinaryFR
@@ -79,6 +80,17 @@ func readBinaryIFD(f *os.File, offset int64) BinaryFlashDescriptor {
 	f.Seek(int64(fcba), 0)
 	binary.Read(bufio.NewReader(f), binary.LittleEndian, &fc)
 	FlashDescriptor.FC = fc
+
+	if(FlashDescriptor.Version == 0) {
+		//IFD Version 1 is using 20MHZ
+		readFreq := (FlashDescriptor.FC.Flcomp >> 17) & 7;
+		if (readFreq == 0) {
+			FlashDescriptor.Version = 1;
+		} else {
+			FlashDescriptor.Version = 2
+		}
+		fmt.Printf("Guessed IFDVersion to be %d\n", FlashDescriptor.Version)
+	}
 
 	fpsba := ((FlashDescriptor.Header.Flmap1 >> 16) & 0xFF) << 4
 	var fps BinaryFPS
